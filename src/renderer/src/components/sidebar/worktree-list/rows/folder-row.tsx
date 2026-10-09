@@ -128,33 +128,29 @@ export function renderFolderWorkspaceVirtualRow(args: {
         data-worktree-drag-group-key={dragGroupKey}
         data-worktree-drag-group-index={ctx.groupIndexByRowKey.get(folderWorktree.id)}
         className={cn(
-          'transition-[opacity,filter] duration-150 ease-out',
+          'relative transition-[opacity,filter] duration-150 ease-out',
           isDragging && 'pointer-events-none opacity-0'
         )}
+        style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}
         onClickCapture={ctx.onRowClickCapture}
         onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktree.id)}
       >
-        <div
-          className="relative"
-          style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}
-        >
-          <WorktreeCard
-            worktree={folderWorktree}
-            repo={undefined}
-            isActive={ctx.activeWorktreeId === folderWorktree.id}
-            isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
-            contentIndent={cardContentIndent}
-            flushSurface
-            nativeDragEnabled={false}
-            onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
-            activationRowKey={folderWorktree.id}
-            onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
-            onContextMenuSelect={ctx.onContextMenuSelect}
-            statusPrDisplay={folderPrDisplay}
-          />
-          <div className="pointer-events-auto absolute right-3 top-1.5">
-            <FolderPathStatusIndicator status={pathStatus} />
-          </div>
+        <WorktreeCard
+          worktree={folderWorktree}
+          repo={undefined}
+          isActive={ctx.activeWorktreeId === folderWorktree.id}
+          isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
+          contentIndent={cardContentIndent}
+          flushSurface
+          nativeDragEnabled={false}
+          onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
+          activationRowKey={folderWorktree.id}
+          onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
+          onContextMenuSelect={ctx.onContextMenuSelect}
+          statusPrDisplay={folderPrDisplay}
+        />
+        <div className="pointer-events-auto absolute right-3 top-1.5">
+          <FolderPathStatusIndicator status={pathStatus} />
         </div>
       </div>
     </div>
