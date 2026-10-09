@@ -179,7 +179,6 @@ export function getSidebarHostHealthLabel(health: SidebarHostScopeOption['health
   }
 }
 
-/** Status-dot fill: green = usable, amber = connecting, grey = idle, red = needs attention. */
 export function getSidebarHostHealthDotClass(health: ExecutionHostHealth): string {
   switch (health) {
     case 'local':
