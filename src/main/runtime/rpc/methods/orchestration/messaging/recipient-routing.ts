@@ -197,7 +197,6 @@ export function resolveBareOrchestrationRecipient(params: {
         ok: true,
         to: `run:${boundRun.id}`,
         runId: boundRun.id,
-        // Why: the caller named a terminal or session, not its Run mailbox; say where the mail waits.
         warning: {
           code: 'recipient_run_bound_redirect',
           recipient: handle,

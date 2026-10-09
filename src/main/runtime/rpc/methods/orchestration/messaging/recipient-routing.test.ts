@@ -118,9 +118,15 @@ describe('orchestration recipient routing oracle', () => {
       subject: 'cross-run'
     })) as SendResult
 
-    expect(result.message).toMatchObject({
-      run_id: recipientRun.id,
-      to_handle: `run:${recipientRun.id}`
+    expect(result).toMatchObject({
+      message: { run_id: recipientRun.id, to_handle: `run:${recipientRun.id}` },
+      warnings: [
+        {
+          code: 'recipient_run_bound_redirect',
+          recipient: 'term_recipient',
+          message: `term_recipient coordinates Run ${recipientRun.id}; queued for run:${recipientRun.id}, the mailbox its orchestration check reads.`
+        }
+      ]
     })
     const check = (await harness.call(
       'orchestration.check',
@@ -128,37 +134,6 @@ describe('orchestration recipient routing oracle', () => {
       ctx
     )) as { messages: { id: string }[] }
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
-  })
-
-  it('warns a worker that its explicit coordinator handle was queued for the Run mailbox', async () => {
-    setup()
-    const workerPane = 'tab_worker:leaf_worker'
-    createRootDispatch(db, db.createTask({ spec: 'report back' }).id, 'term_worker', workerPane)
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_coord'
-        ? harness.coordinatorPaneKey
-        : handle === 'term_worker'
-          ? workerPane
-          : null
-    )
-
-    const result = await call({
-      from: 'term_worker',
-      to: 'term_coord',
-      type: 'status',
-      subject: 'addressed to the coordinator pane'
-    })
-
-    expect(result).toMatchObject({
-      message: { run_id: senderRunId, to_handle: `run:${senderRunId}` },
-      warnings: [
-        {
-          code: 'recipient_run_bound_redirect',
-          recipient: 'term_coord',
-          message: `term_coord coordinates Run ${senderRunId}; queued for run:${senderRunId}, the mailbox its orchestration check reads.`
-        }
-      ]
-    })
   })
 
   it('never lets a stale leaf handle adopt its replacement pane Run', async () => {
