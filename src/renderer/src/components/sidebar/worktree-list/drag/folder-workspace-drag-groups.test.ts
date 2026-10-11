@@ -21,6 +21,7 @@ import {
 import { buildWorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -233,14 +234,13 @@ describe('folder workspace sidebar drag groups', () => {
 
     // The pointer drag starts only for rows indexed here, keyed like the folder row's row key.
     const { groupKeyByRowKey, groupIndexByRowKey } = getWorktreeDragIndexes(rows)
-    expect([FOLDER_A, FOLDER_B, FOLDER_C].map((id) => groupKeyByRowKey.get(id))).toEqual([
+    const rowKeys = FOLDERS.map((workspace) => getFolderWorkspaceHostIdentity(workspace))
+    expect(rowKeys.map((rowKey) => groupKeyByRowKey.get(rowKey))).toEqual([
       folderGroup?.key,
       folderGroup?.key,
       folderGroup?.key
     ])
-    expect([FOLDER_A, FOLDER_B, FOLDER_C].map((id) => groupIndexByRowKey.get(id))).toEqual([
-      0, 1, 2
-    ])
+    expect(rowKeys.map((rowKey) => groupIndexByRowKey.get(rowKey))).toEqual([0, 1, 2])
   })
 
   it('keeps a folder workspace where it was dropped above its siblings', () => {

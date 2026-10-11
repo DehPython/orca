@@ -3,6 +3,7 @@ import { getNaturalWorktreeIds } from '../../natural-worktree-ids'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { WorktreeDragGroup } from '../../worktree-manual-order'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
 
 const FOLDER_WORKSPACE_DRAG_GROUP_PREFIX = 'folder-workspaces:'
 
@@ -82,9 +83,9 @@ export function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
       continue
     }
     if (row.type === 'folder-workspace') {
-      // Folder rows use their synthetic worktree id as the row key.
+      // Folder rows use their host-qualified identity as the row key.
       indexRow(
-        folderWorkspaceKey(row.folderWorkspace.id),
+        getFolderWorkspaceHostIdentity(row.folderWorkspace),
         getFolderWorkspaceDragGroupKey(sectionKey)
       )
       continue

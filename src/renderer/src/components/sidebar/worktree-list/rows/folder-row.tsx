@@ -8,7 +8,10 @@ import type {
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
@@ -30,6 +33,7 @@ export type FolderWorkspaceRowContext = {
   groupIndexByRowKey: ReadonlyMap<string, number>
   worktreeDragState: WorktreeRowDragState
   activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: AppState['activeWorkspaceExecutionHostId']
   currentWorktreeId: string | null
   selectedWorktreeIds: ReadonlySet<string>
   repoMap: Map<string, Repo>
@@ -65,6 +69,11 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const { ctx, row, vItem } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
+  const isActiveWorktree =
+    ctx.activeWorktreeId === folderWorktree.id &&
+    (!ctx.activeWorkspaceExecutionHostId ||
+      folderWorktreeIdentity ===
+        composeWorktreeHostIdentity(ctx.activeWorkspaceExecutionHostId, folderWorktree.id))
   const pathStatus = ctx.getCachedFolderWorkspacePathStatus({
     scope: 'folder-workspace',
     folderWorkspaceId: row.folderWorkspace.id
@@ -90,7 +99,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
     groupDepth: row.groupDepth,
     lineageDepth: row.depth
   })
-  const dragGroupKey = ctx.groupKeyByRowKey.get(folderWorktree.id)
+  const dragGroupKey = ctx.groupKeyByRowKey.get(folderWorktreeIdentity)
   const { draggingWorktreeId, previewOffsetsByWorktreeId } = ctx.worktreeDragState
   const isDragging = draggingWorktreeId === folderWorktree.id
   // Why: the option row is the drag source; cloning the outer frame would carry its virtual offset into the drag preview.
@@ -117,34 +126,36 @@ export function renderFolderWorkspaceVirtualRow(args: {
       }}
     >
       <div
-        id={getWorktreeOptionId(folderWorktree.id)}
+        id={getWorktreeOptionId(folderWorktreeIdentity)}
         role="option"
         aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
-        aria-current={ctx.activeWorktreeId === folderWorktree.id ? 'page' : undefined}
+        aria-current={isActiveWorktree ? 'page' : undefined}
         data-worktree-id={folderWorktree.id}
         data-worktree-host-identity={folderWorktreeIdentity}
-        data-worktree-row-key={folderWorktree.id}
+        data-worktree-row-key={folderWorktreeIdentity}
         data-worktree-drag-id={dragGroupKey ? folderWorktree.id : undefined}
         data-worktree-drag-group-key={dragGroupKey}
-        data-worktree-drag-group-index={ctx.groupIndexByRowKey.get(folderWorktree.id)}
+        data-worktree-drag-group-index={ctx.groupIndexByRowKey.get(folderWorktreeIdentity)}
         className={cn(
           'relative transition-[opacity,filter] duration-150 ease-out',
           isDragging && 'pointer-events-none opacity-0'
         )}
         style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}
         onClickCapture={ctx.onRowClickCapture}
-        onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktree.id)}
+        onPointerDown={(event) =>
+          ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)
+        }
       >
         <WorktreeCard
           worktree={folderWorktree}
           repo={undefined}
-          isActive={ctx.activeWorktreeId === folderWorktree.id}
+          isActive={isActiveWorktree}
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
           contentIndent={cardContentIndent}
           flushSurface
           nativeDragEnabled={false}
           onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
-          activationRowKey={folderWorktree.id}
+          activationRowKey={folderWorktreeIdentity}
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}
           statusPrDisplay={folderPrDisplay}

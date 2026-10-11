@@ -47,6 +47,27 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('keeps release build staging out of app.asar while preserving runtime output', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    expect(isPacked(join('/app', '.build'), { isDirectory: () => true })).toBe(false)
+    for (const stagingPath of [
+      '.build/release-javascript/release-javascript.tar.gz',
+      '.build/release-javascript/manifest.json',
+      '.build/release-javascript-123/out/main/index.js'
+    ]) {
+      expect(isPacked(join('/app', stagingPath), { isDirectory: () => false })).toBe(false)
+    }
+    for (const runtimePath of [
+      'out/main/index.js',
+      'out/cli/index.js',
+      'out/renderer/index.html'
+    ]) {
+      expect(isPacked(join('/app', runtimePath), { isDirectory: () => false })).toBe(true)
+    }
+  })
+
   it('keeps local agent tooling out of app.asar', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     matcher.prependPattern('**/*')
@@ -242,6 +263,23 @@ describe('electron-builder config', () => {
     ])
   })
 
+  // Why: serve-sim's addon is a Mach-O, and Windows signing rejects every *.node that is not PE.
+  it('keeps serve-sim out of the Windows and Linux runtime closures', () => {
+    const {
+      PACKAGED_RUNTIME_PACKAGE_ROOTS,
+      createPackagedRuntimeNodeModuleResources
+    } = require('../packaged-runtime-node-modules.cjs')
+    expect(PACKAGED_RUNTIME_PACKAGE_ROOTS).not.toContain('serve-sim')
+    const serveSimTarget = join('node_modules', 'serve-sim')
+    expect(createPackagedRuntimeNodeModuleResources('linux').map((r) => r.to)).not.toContain(
+      serveSimTarget
+    )
+    expect(electronBuilderConfig.linux.extraResources.map((r) => r.to)).not.toContain(
+      serveSimTarget
+    )
+    expect(electronBuilderConfig.win.extraResources.map((r) => r.to)).not.toContain(serveSimTarget)
+  })
+
   // Why: the Windows CLI shim is delivered only via extraResources to
   // resources/bin/orca.cmd (beside the native resources/bin/orca.exe). If the
   // source tree is also packed into app.asar it gets extracted by
@@ -317,6 +355,28 @@ describe('electron-builder config', () => {
 
     const viteConfig = await readFile(join(REPO_ROOT, 'electron.vite.config.ts'), 'utf8')
     expect(viteConfig).toMatch(new RegExp(`'${entryFilename.replace(/\.js$/, '')}':\\s*resolve\\(`))
+  })
+
+  // Why: the CLI runs this entry under ELECTRON_RUN_AS_NODE, which cannot read
+  // app.asar, so a packed copy sends every `orca serve` to Electron (#27307).
+  it('unpacks the orcad serve-selection entry the CLI runs', async () => {
+    const sharedSource = await readFile(
+      join(REPO_ROOT, 'src', 'shared', 'orcad-local-serve-selection.ts'),
+      'utf8'
+    )
+    const entryName = sharedSource.match(/ORCAD_LOCAL_SERVE_SELECTION_ENTRY = '([^']+)'/)?.[1]
+    expect(entryName).toBeDefined()
+
+    const matcher = new FileMatcher(
+      '/app',
+      '/dest',
+      (value) => value,
+      electronBuilderConfig.asarUnpack
+    )
+    const isUnpacked = matcher.createFilter()
+    expect(
+      isUnpacked(join('/app', 'out', 'main', `${entryName}.js`), { isDirectory: () => false })
+    ).toBe(true)
   })
 
   // Why: the scanner service is forked with ELECTRON_RUN_AS_NODE, so asar is
