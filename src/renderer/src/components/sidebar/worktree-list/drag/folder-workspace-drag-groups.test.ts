@@ -257,6 +257,25 @@ describe('folder workspace sidebar drag groups', () => {
     expect(renderedFolderIds(reorderedRows)).toEqual([FOLDER_C, FOLDER_A, FOLDER_B])
   })
 
+  it('moves only the folder on the given host when another host has the same id', () => {
+    const local = folder('fw-a', 3000)
+    const remote = makeFolderWorkspace({ id: 'fw-a', executionHostId: 'ssh:remote-box' })
+    const store = createTestStore()
+    const updateFolderWorkspace = vi.fn(() => new Promise<boolean>(() => {}))
+    store.setState({ folderWorkspaces: [local, remote], updateFolderWorkspace })
+    const updates = { manualOrder: 9000 }
+    void store
+      .getState()
+      .updateWorktreesMeta([{ worktreeId: FOLDER_A, updates, executionHostId: 'ssh:remote-box' }])
+
+    // The local folder with the same id keeps its rank.
+    const ranks = store.getState().folderWorkspaces.map((workspace) => workspace.manualOrder)
+    expect(ranks).toEqual([3000, 9000])
+    expect(updateFolderWorkspace).toHaveBeenCalledWith('fw-a', updates, {
+      executionHostId: 'ssh:remote-box'
+    })
+  })
+
   it('saves only the dragged group when the selection spans worktrees and folders', () => {
     const worktrees = [
       { ...WORKTREE, id: 'wt-todo', manualOrder: 6000, workspaceStatus: 'todo' },

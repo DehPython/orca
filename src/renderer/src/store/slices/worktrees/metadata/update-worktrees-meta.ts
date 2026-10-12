@@ -30,6 +30,7 @@ function getKnownOwnerHostIds(
 type FolderWorkspaceMetaUpdate = {
   folderWorkspaceId: string
   updates: ReturnType<typeof getFolderWorkspaceMetaUpdates>
+  executionHostId?: ExecutionHostId
 }
 
 // Why: like worktree rows, a dropped folder row must hold its new slot while the save is in flight.
@@ -39,8 +40,8 @@ function applyFolderWorkspaceMetaUpdates(
 ): ReturnType<WorktreeSliceGet>['folderWorkspaces'] {
   // Same owner lookup as updateFolderWorkspace, so a same-id folder on another host stays as is.
   const updatesByOwner = new Map<object, FolderWorkspaceMetaUpdate['updates']>()
-  for (const { folderWorkspaceId, updates } of entries) {
-    const owner = findFolderWorkspaceOwner(state, folderWorkspaceId)
+  for (const { folderWorkspaceId, updates, executionHostId } of entries) {
+    const owner = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
     if (owner) {
       updatesByOwner.set(owner, { ...updatesByOwner.get(owner), ...updates })
     }
@@ -72,7 +73,8 @@ export function createUpdateWorktreesMeta(
         if (Object.keys(folderUpdates).length > 0) {
           folderWorkspaceUpdates.push({
             folderWorkspaceId: scope.folderWorkspaceId,
-            updates: folderUpdates
+            updates: folderUpdates,
+            executionHostId: entry.executionHostId
           })
         }
       } else {
@@ -116,8 +118,8 @@ export function createUpdateWorktreesMeta(
     })
 
     await Promise.all([
-      ...folderWorkspaceUpdates.map(({ folderWorkspaceId, updates }) =>
-        get().updateFolderWorkspace(folderWorkspaceId, updates)
+      ...folderWorkspaceUpdates.map(({ folderWorkspaceId, updates, executionHostId }) =>
+        get().updateFolderWorkspace(folderWorkspaceId, updates, { executionHostId })
       ),
       ...gitWorktreeUpdates.map(async ({ worktreeId, updates, executionHostId }) => {
         try {
