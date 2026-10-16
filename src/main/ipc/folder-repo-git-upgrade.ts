@@ -6,10 +6,10 @@ import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
+import { findExtraFolderWorkspaceIds } from '../folder-workspace-meta-presence'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { getGitRepoRootAsync, isGitRepoAsync } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos/repos-changed-notification'
@@ -57,18 +57,10 @@ function isUpgradeCandidate(repo: Repo): boolean {
   )
 }
 
-/**
- * A folder project's extra workspaces are `worktreeMeta` rows keyed
- * `repoId::path::workspace:<uuid>`, and only the folder branch of the worktree listing
- * knows those keys exist. Flipping `kind` moves the repo onto the git branch, which lists
- * `git worktree list` (one path) and prunes every lineage id under the repo that is not in
- * it — so those workspaces vanish from the sidebar and their lineage is deleted. Migrating
- * them belongs to the listing code that owns both shapes, not to this watch, so refuse the
- * upgrade instead of destroying them. Such a project keeps working exactly as it does today.
- */
+// Why a quiet 'blocked' here: the repo write refuses this upgrade anyway (it would hide those
+// workspaces); checking first keeps the watch from treating a kept folder project as an error.
 function hasExtraFolderWorkspaces(store: Store, repo: Repo): boolean {
-  const prefix = `${repo.id}::${repo.path}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
-  return Object.keys(store.getAllWorktreeMeta()).some((key) => key.startsWith(prefix))
+  return findExtraFolderWorkspaceIds(repo, store.getAllWorktreeMeta()).length > 0
 }
 
 /** Identity of the `.git` entry, or null when there is none. */
@@ -101,13 +93,13 @@ function resolveRealPath(pathValue: string): string {
  *   the path the user picked; when a symlinked parent makes those differ, the root reads
  *   as an *external* worktree, and hiding those would hide the project's only workspace.
  */
-function resolveUpgrade(
+async function resolveUpgrade(
   repoPath: string
-): { folderUpgradeGitRootPath: string; externalWorktreeVisibility?: 'hide' } | null {
-  if (!isGitRepo(repoPath)) {
+): Promise<{ folderUpgradeGitRootPath: string; externalWorktreeVisibility?: 'hide' } | null> {
+  if (!(await isGitRepoAsync(repoPath))) {
     return null
   }
-  const gitRoot = getGitRepoRoot(repoPath)
+  const gitRoot = await getGitRepoRootAsync(repoPath)
   if (resolveRealPath(gitRoot) !== resolveRealPath(repoPath)) {
     return null
   }
@@ -127,7 +119,18 @@ async function upgradeFolderRepo(watch: UpgradeWatch, repoId: string): Promise<U
   if (hasExtraFolderWorkspaces(watch.store, current)) {
     return 'blocked'
   }
-  const updates = resolveUpgrade(current.path)
+  const inspectedPath = current.path
+  const updates = await resolveUpgrade(inspectedPath)
+  const latest = watch.store.getRepo(repoId)
+  if (
+    watch.disposed ||
+    !latest ||
+    !isUpgradeCandidate(latest) ||
+    latest.path !== inspectedPath ||
+    hasExtraFolderWorkspaces(watch.store, latest)
+  ) {
+    return 'blocked'
+  }
   if (!updates) {
     return 'rejected'
   }
