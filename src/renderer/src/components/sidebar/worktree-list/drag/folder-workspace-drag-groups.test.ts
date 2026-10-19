@@ -54,7 +54,8 @@ const FOLDER_C = folderWorkspaceKey('fw-c')
 function buildSidebarRows(
   groupBy: WorktreeGroupBy,
   folderWorkspaces: readonly FolderWorkspace[] = FOLDERS,
-  worktrees: Worktree[] = [WORKTREE]
+  worktrees: Worktree[] = [WORKTREE],
+  projectGroups: ProjectGroup[] = [GROUP]
 ): Row[] {
   return buildRows(
     groupBy,
@@ -69,7 +70,7 @@ function buildSidebarRows(
     undefined,
     false,
     undefined,
-    [GROUP],
+    projectGroups,
     new Set(),
     new Map(),
     new Map(),
@@ -100,9 +101,12 @@ const SLOT = {
 const LANE_TARGET = { status: 'in-review', isPinDrop: false, lineageParentId: null }
 const PIN_TARGET = { status: null, isPinDrop: true, lineageParentId: null }
 
-function statusLaneDragKeys(): { folderKey: string; worktreeKey: string } {
-  const rows = buildSidebarRows('workspace-status')
-  return { folderKey: dragGroupKey(rows, FOLDER_A), worktreeKey: dragGroupKey(rows, WORKTREE.id) }
+// Folder rows drag only under their project group, so their key comes from the repo layout.
+function dragKeys(): { folderKey: string; worktreeKey: string } {
+  return {
+    folderKey: dragGroupKey(buildSidebarRows('repo'), FOLDER_A),
+    worktreeKey: dragGroupKey(buildSidebarRows('workspace-status'), WORKTREE.id)
+  }
 }
 
 function pointerDrag(
@@ -243,6 +247,40 @@ describe('folder workspace sidebar drag groups', () => {
     expect(rowKeys.map((rowKey) => groupIndexByRowKey.get(rowKey))).toEqual([0, 1, 2])
   })
 
+  it('drags a folder workspace only among the folders of its own project group', () => {
+    const otherGroup: ProjectGroup = { ...GROUP, id: 'group-2', name: 'Research', tabOrder: 1 }
+    // fw-b moves to the other group, so a lane renders the two groups' folders interleaved.
+    const folders = [
+      folder('fw-a', 3000),
+      { ...folder('fw-b', 2000), projectGroupId: otherGroup.id },
+      folder('fw-c', 1000)
+    ]
+    const projectGroups = [GROUP, otherGroup]
+    for (const groupBy of ['none', 'workspace-status'] as const) {
+      const rows = buildSidebarRows(groupBy, folders, [WORKTREE], projectGroups)
+      expect(renderedFolderIds(rows)).toEqual([FOLDER_A, FOLDER_B, FOLDER_C])
+      // No folder row can start a drag here; the lane's worktree still can.
+      const { groupKeyByRowKey } = getWorktreeDragIndexes(rows)
+      const rowKeys = folders.map((workspace) => getFolderWorkspaceHostIdentity(workspace))
+      expect(rowKeys.map((rowKey) => groupKeyByRowKey.get(rowKey))).toEqual([
+        undefined,
+        undefined,
+        undefined
+      ])
+      expect(getWorktreeDragGroups(rows).map((group) => group.worktreeIds)).toEqual([[WORKTREE.id]])
+      expect(getWorktreeDragUnitGroups(rows).map((group) => group.worktreeIds)).toEqual([
+        [WORKTREE.id]
+      ])
+    }
+
+    const repoRows = buildSidebarRows('repo', folders, [WORKTREE], projectGroups)
+    expect(getWorktreeDragGroups(repoRows).map((group) => group.worktreeIds)).toEqual([
+      [FOLDER_A, FOLDER_C],
+      [WORKTREE.id],
+      [FOLDER_B]
+    ])
+  })
+
   it('keeps a folder workspace where it was dropped above its siblings', () => {
     const saved = saveSlotDrop(buildSidebarRows('repo'), [WORKTREE], [FOLDER_C], 0)
 
@@ -282,25 +320,24 @@ describe('folder workspace sidebar drag groups', () => {
       { ...WORKTREE, id: 'wt-top', manualOrder: 5000 },
       { ...WORKTREE, id: 'wt-next', manualOrder: 4000 }
     ]
-    const rows = buildSidebarRows('workspace-status', FOLDERS, worktrees)
-    // A lane renders its folder workspaces after every worktree, so the two kinds drag apart.
+    const rows = buildSidebarRows('repo', FOLDERS, worktrees)
+    // A project group renders its folder workspaces above its repos, so the two kinds drag apart.
     expect(getWorktreeDragGroups(rows).map((group) => group.worktreeIds)).toEqual([
-      ['wt-todo'],
-      ['wt-top', 'wt-next'],
-      [FOLDER_A, FOLDER_B, FOLDER_C]
+      [FOLDER_A, FOLDER_B, FOLDER_C],
+      ['wt-todo', 'wt-top', 'wt-next']
     ])
 
-    // The other selected row keeps its rank; wt-next ranks above wt-top and fw-a below fw-c.
-    expect(saveSlotDrop(rows, worktrees, ['wt-next', FOLDER_A], 0)).toEqual(
+    // The other selected row keeps its rank; wt-next lands above wt-top and fw-a below fw-b.
+    expect(saveSlotDrop(rows, worktrees, ['wt-next', FOLDER_A], 1)).toEqual(
       new Map([['wt-next', { manualOrder: 5500 }]])
     )
-    expect(saveSlotDrop(rows, worktrees, [FOLDER_A, 'wt-top'], 3)).toEqual(
-      new Map([[FOLDER_A, { manualOrder: 0 }]])
+    expect(saveSlotDrop(rows, worktrees, [FOLDER_A, 'wt-top'], 2)).toEqual(
+      new Map([[FOLDER_A, { manualOrder: 1500 }]])
     )
   })
 
   it('shows a folder workspace drag no board, status lane or pin target', () => {
-    const { folderKey, worktreeKey } = statusLaneDragKeys()
+    const { folderKey, worktreeKey } = dragKeys()
     const worktreeFrame = flushOver(worktreeKey, WORKTREE.id)
     expect(worktreeFrame.onWorkspaceBoardDragPreviewStart).toHaveBeenCalled()
     expect(worktreeFrame.state.dropIndicatorY).toBe(300)
@@ -312,7 +349,7 @@ describe('folder workspace sidebar drag groups', () => {
   })
 
   it('commits no status lane or pin drop for a folder workspace drag', () => {
-    const { folderKey, worktreeKey } = statusLaneDragKeys()
+    const { folderKey, worktreeKey } = dragKeys()
     expect(releaseOver(worktreeKey, WORKTREE.id).onMoveWorktreesToStatusAtIndex).toHaveBeenCalled()
 
     expect(releaseOver(folderKey, FOLDER_A).onMoveWorktreesToStatusAtIndex).not.toHaveBeenCalled()

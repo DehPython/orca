@@ -1,6 +1,6 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
-import { getFolderWorkspaceDragGroupKey } from './worktree-list/drag/groups'
+import { getFolderWorkspaceRowDragGroupKey } from './worktree-list/drag/groups'
 import { getNaturalWorktreeIds } from './natural-worktree-ids'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
@@ -15,7 +15,7 @@ type WorktreeDragUnitRow =
   | { type: 'imported-worktrees-card' }
   | { type: 'new-external-worktrees-inbox' }
   | { type: 'pending-creation' }
-  | { type: 'folder-workspace'; folderWorkspace: { id: string } }
+  | { type: 'folder-workspace'; folderWorkspace: { id: string; projectGroupId: string } }
 
 export function getWorktreeDragUnitGroups(
   rows: readonly WorktreeDragUnitRow[]
@@ -37,13 +37,16 @@ export function getWorktreeDragUnitGroups(
       continue
     }
     if (row.type === 'folder-workspace') {
+      const key = getFolderWorkspaceRowDragGroupKey(
+        current?.key ?? ALL_GROUP_KEY,
+        row.folderWorkspace
+      )
+      if (!key) {
+        continue
+      }
       if (!currentFolderUnits) {
         currentFolderUnits = []
-        groups.push({
-          key: getFolderWorkspaceDragGroupKey(current?.key ?? ALL_GROUP_KEY),
-          units: currentFolderUnits,
-          worktreeIds: []
-        })
+        groups.push({ key, units: currentFolderUnits, worktreeIds: [] })
       }
       const worktreeId = folderWorkspaceKey(row.folderWorkspace.id)
       currentFolderUnits.push({ worktreeId, worktreeIds: [worktreeId] })

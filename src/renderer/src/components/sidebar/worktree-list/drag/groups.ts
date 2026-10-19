@@ -1,4 +1,8 @@
-import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import {
+  ALL_GROUP_KEY,
+  PINNED_GROUP_KEY,
+  getProjectGroupHeaderKey
+} from '../../../../../../shared/sidebar-list/group-keys'
 import { getNaturalWorktreeIds } from '../../natural-worktree-ids'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { WorktreeDragGroup } from '../../worktree-manual-order'
@@ -8,8 +12,19 @@ import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-
 const FOLDER_WORKSPACE_DRAG_GROUP_PREFIX = 'folder-workspaces:'
 
 // Why apart from the section's worktrees: every emitter orders folder workspaces only among themselves.
-export function getFolderWorkspaceDragGroupKey(sectionKey: string): string {
+function getFolderWorkspaceDragGroupKey(sectionKey: string): string {
   return `${FOLDER_WORKSPACE_DRAG_GROUP_PREFIX}${sectionKey}`
+}
+
+// Why only under its own project group header: lanes interleave folders of different groups,
+// and the drag geometry needs one group's rows to sit together.
+export function getFolderWorkspaceRowDragGroupKey(
+  sectionKey: string,
+  folderWorkspace: { projectGroupId: string }
+): string | null {
+  return sectionKey === getProjectGroupHeaderKey(folderWorkspace.projectGroupId)
+    ? getFolderWorkspaceDragGroupKey(sectionKey)
+    : null
 }
 
 // Why: the board, status lanes, pin and nesting act only on git worktrees, so these drags only reorder.
@@ -31,8 +46,14 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
       continue
     }
     if (row.type === 'folder-workspace') {
+      const key = getFolderWorkspaceRowDragGroupKey(
+        current?.key ?? ALL_GROUP_KEY,
+        row.folderWorkspace
+      )
+      if (!key) {
+        continue
+      }
       if (!currentFolders) {
-        const key = getFolderWorkspaceDragGroupKey(current?.key ?? ALL_GROUP_KEY)
         currentFolders = { key, ids: [] }
         groups.push({ key, worktreeIds: currentFolders.ids })
       }
@@ -83,11 +104,11 @@ export function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
       continue
     }
     if (row.type === 'folder-workspace') {
-      // Folder rows use their host-qualified identity as the row key.
-      indexRow(
-        getFolderWorkspaceHostIdentity(row.folderWorkspace),
-        getFolderWorkspaceDragGroupKey(sectionKey)
-      )
+      const groupKey = getFolderWorkspaceRowDragGroupKey(sectionKey, row.folderWorkspace)
+      if (groupKey) {
+        // Folder rows use their host-qualified identity as the row key.
+        indexRow(getFolderWorkspaceHostIdentity(row.folderWorkspace), groupKey)
+      }
       continue
     }
     if (row.type !== 'item') {
