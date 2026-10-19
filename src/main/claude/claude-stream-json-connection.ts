@@ -54,6 +54,15 @@ export type ClaudeStreamJsonLaunch = {
   options: ClaudeStructuredSdkOptions
   cwd: string
   env?: Record<string, string>
+  /** Removed after the child's env is built over Orca's own, as every provider child's are. */
+  envToDelete?: readonly string[]
+}
+
+function withoutKeys(env: Record<string, string>, keys: readonly string[]): Record<string, string> {
+  for (const key of keys) {
+    delete env[key]
+  }
+  return env
 }
 
 export type ClaudeStreamJsonConnectionHandlers = {
@@ -72,8 +81,6 @@ export type ClaudeStreamJsonConnectionHandlers = {
   /** The root process exited, reported once. `expected`: a close had begun, so it is that close's
    *  end, even one that ran out of its own escalation first and came back unproven. */
   onExit?: (error: Error, exit?: { expected: boolean }) => void
-  /** Any stdout or stderr chunk from the child. */
-  onOutput?: () => void
 }
 
 /**
@@ -130,7 +137,7 @@ export async function openClaudeStreamJsonConnection(
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
-  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, handlers.onOutput)
+  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform)
   const inbox = createClaudeUserMessageQueue()
   const session = (queryImpl ?? query)({
     prompt: inbox.messages,
@@ -141,10 +148,13 @@ export async function openClaudeStreamJsonConnection(
       // exactly the ambient ANTHROPIC_* auth leak this lane already shipped once.
       // Orca's own CLAUDE_CONFIG_DIR is dropped for the same reason the launch drops the
       // shell's: the record's pin in `launch.env` must be the only home the child sees.
-      env: buildClaudeChildProcessEnv(launch.env, {
-        inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
-        scrubConfiguredChildSessionStamps: true
-      }),
+      env: withoutKeys(
+        buildClaudeChildProcessEnv(launch.env, {
+          inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
+          scrubConfiguredChildSessionStamps: true
+        }),
+        launch.envToDelete ?? []
+      ),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),

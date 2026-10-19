@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
 import { createFixedKeyLegacyHandshakeForTest } from '../../../shared/paired-e2ee-fixed-key-test-fixture'
@@ -16,7 +17,10 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
+  AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
+  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
@@ -26,7 +30,9 @@ import {
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
+import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from '../../../shared/terminal-quick-command-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../../shared/agent-session-background-task-child-views-capability'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../shared/agent-session-current-requests-capability'
 
 const fakeSockets: FakeWebSocket[] = []
 
@@ -68,12 +74,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('closes a connecting child search socket immediately on abort and never starts after pre-abort', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const controller = new AbortController()
     const pending = client.subscribe(
       'files.search',
@@ -96,12 +104,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('advertises explicit close intent support in encrypted authentication', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const call = client.call('status.get', {})
     const socket = fakeSockets[0]!
     socket.readyState = FakeWebSocket.OPEN
@@ -121,8 +131,11 @@ describe('WebRuntimeClient', () => {
       deviceToken: 'token',
       clientCapabilities: [
         AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+        AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
         AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
         AGENT_SESSION_TURN_ITEM_CAPABILITY,
+        AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
+        AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
         SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
         SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
         SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
@@ -131,7 +144,9 @@ describe('WebRuntimeClient', () => {
         WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
         WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
         WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
-        WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
+        WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
+        TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
+        AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY
       ]
     })
 
@@ -140,12 +155,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('closes child subscription clients when the owning client closes', () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const child = { close: vi.fn() }
 
     ;(
@@ -160,12 +177,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('passes local close semantics to child subscription clients', () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const child = { close: vi.fn() }
 
     ;(
@@ -180,12 +199,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('does not report locally closed subscriptions as remote closes', () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const onClose = vi.fn()
     const internals = client as unknown as {
       subscriptions: Map<
@@ -205,12 +226,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('reports subscriptions closed when the owning client closes', () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const onClose = vi.fn()
     const internals = client as unknown as {
       subscriptions: Map<
@@ -237,12 +260,14 @@ describe('WebRuntimeClient', () => {
     }
     timerWindow.setTimeout = setTimeout
     timerWindow.clearTimeout = clearTimeout
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
 
     try {
       const callPromise = client.call('status.get', {}, { timeoutMs: 30_000 })
@@ -266,12 +291,14 @@ describe('WebRuntimeClient', () => {
     timerWindow.clearTimeout = clearTimeout
     // Pin the one-sided reconnect jitter to zero so the redial lands on its exact backoff step.
     const random = vi.spyOn(Math, 'random').mockReturnValue(0)
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
 
     try {
       const staleSocket = fakeSockets[0]!
@@ -297,12 +324,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('delivers plain unary responses to their subscription instead of dropping them', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     try {
       const keyPair = generateKeyPair()
       const sharedKey = deriveSharedKey(keyPair.secretKey, keyPair.publicKey)
@@ -341,12 +370,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('keeps file watches on the owning WebSocket instead of opening child clients', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const handle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
       childClients: Set<WebRuntimeClient>
@@ -381,12 +412,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('unwatches a direct file watch before removing the shared local subscription', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
       subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
@@ -428,12 +461,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('retains and retries a shared local subscription when remote unwatch returns failure', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
       subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
@@ -496,12 +531,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('retries every failed same-root teardown before opening a replacement watch', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const handles = Array.from({ length: 3 }, () => ({
       unsubscribe: vi.fn(),
       sendBinary: vi.fn()
@@ -562,12 +599,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('keeps a stopped direct file watch alive until ready so it can unwatch', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
       subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
@@ -616,12 +655,14 @@ describe('WebRuntimeClient', () => {
     }
     timerWindow.setTimeout = setTimeout
     timerWindow.clearTimeout = clearTimeout
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
       subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
@@ -672,12 +713,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('decrypts binary WebSocket frames into subscription callbacks', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const sharedKey = new Uint8Array(32).fill(7)
     const onBinary = vi.fn()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the client's private transport state; a renamed field fails the test.
@@ -748,12 +791,14 @@ describe('WebRuntimeClient', () => {
     if (!address || typeof address !== 'object') {
       throw new Error('Expected local WebSocket test server address')
     }
-    let client: WebRuntimeClient | null = new WebRuntimeClient({
-      v: 2,
-      endpoint: `ws://127.0.0.1:${address.port}`,
-      deviceToken: 'token',
-      publicKeyB64: publicKeyToBase64(serverKeys.publicKey)
-    })
+    let client: WebRuntimeClient | null = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: `ws://127.0.0.1:${address.port}`,
+        deviceToken: 'token',
+        publicKeyB64: publicKeyToBase64(serverKeys.publicKey)
+      })
+    )
     try {
       const binaryFrame = new Promise<Uint8Array<ArrayBufferLike>>((resolve) => {
         void client!.subscribe(
@@ -778,12 +823,14 @@ describe('WebRuntimeClient', () => {
   })
 
   it('emits the buildUnsubscribe RPC frame on subscription teardown', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     const internals = client as unknown as {
       waitForConnected: (timeoutMs?: number) => Promise<void>
       sendEncrypted: (message: unknown) => boolean

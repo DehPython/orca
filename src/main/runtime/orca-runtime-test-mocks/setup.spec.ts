@@ -115,14 +115,6 @@ const {
   forceDeleteLocalBranchMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
-  sshGitProviders,
-  sshProviderGenerations,
-  getSshGitProviderMock,
-  getSshGitProviderGenerationMock,
-  registerSshGitProviderMock,
-  unregisterSshGitProviderMock,
-  getActiveMultiplexerMock,
-  muxRequestMock,
   invalidateAuthorizedRootsCacheMock,
   prepareLocalWorktreeRootForRepoMock,
   createHostedReviewMock,
@@ -170,6 +162,7 @@ const {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,
@@ -191,10 +184,6 @@ const {
   getIssueMock,
   deleteWorktreeHistoryDirMock
 } = vi.hoisted(() => {
-  // Why: SSH runtime tests register providers via the public dispatcher API, so the mock needs the same registry semantics as the real module.
-  const sshGitProviders = new Map<string, unknown>()
-  const sshProviderGenerations = new Map<string, number>()
-
   return {
     MOCK_GIT_WORKTREES: [
       {
@@ -211,26 +200,6 @@ const {
     forceDeleteLocalBranchMock: vi.fn() as TestMock,
     computeWorktreePathMock: vi.fn() as TestMock,
     ensurePathWithinWorkspaceMock: vi.fn() as TestMock,
-    sshGitProviders,
-    sshProviderGenerations,
-    getSshGitProviderMock: vi.fn((connectionId: string) => sshGitProviders.get(connectionId)),
-    getSshGitProviderGenerationMock: vi.fn(
-      (connectionId: string) => sshProviderGenerations.get(connectionId) ?? 0
-    ),
-    registerSshGitProviderMock: vi.fn((connectionId: string, provider: unknown) => {
-      sshGitProviders.set(connectionId, provider)
-      sshProviderGenerations.set(connectionId, (sshProviderGenerations.get(connectionId) ?? 0) + 1)
-    }),
-    unregisterSshGitProviderMock: vi.fn((connectionId: string) => {
-      if (sshGitProviders.delete(connectionId)) {
-        sshProviderGenerations.set(
-          connectionId,
-          (sshProviderGenerations.get(connectionId) ?? 0) + 1
-        )
-      }
-    }),
-    getActiveMultiplexerMock: vi.fn() as TestMock,
-    muxRequestMock: vi.fn() as TestMock,
     invalidateAuthorizedRootsCacheMock: vi.fn() as TestMock,
     prepareLocalWorktreeRootForRepoMock: vi.fn() as TestMock,
     createHostedReviewMock: vi.fn() as TestMock,
@@ -280,6 +249,7 @@ const {
     listGitLabWorkItemsMock: vi.fn() as TestMock,
     listGitLabIssuesMock: vi.fn() as TestMock,
     listGitLabLabelsMock: vi.fn() as TestMock,
+    listGitLabAssignableUsersMock: vi.fn<TestMock>(),
     listGitLabTodosMock: vi.fn() as TestMock,
     getGitLabProjectRefForRemoteMock: vi.fn() as TestMock,
     getGitLabWorkItemByProjectRefMock: vi.fn() as TestMock,
@@ -323,26 +293,7 @@ vi.mock('../../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
-vi.mock('../../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: getSshGitProviderGenerationMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
-    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
-  requireSshGitProvider: (connectionId: string) => {
-    const provider = getSshGitProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
-    return provider
-  },
-  registerSshGitProvider: registerSshGitProviderMock,
-  unregisterSshGitProvider: unregisterSshGitProviderMock
-}))
-
-vi.mock('../../ssh/ssh-target-registry', () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock,
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
@@ -408,15 +359,14 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
 })
 
 vi.mock('../../ipc/filesystem-auth', () => ({
-  resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue),
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
-  invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock,
-  isENOENT: (error: unknown) =>
-    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+  resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
 vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+}))
+
+vi.mock('../../ipc/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
 
@@ -491,6 +441,7 @@ vi.mock('../../gitlab/client', async (importOriginal) => {
     listWorkItems: listGitLabWorkItemsMock,
     listIssues: listGitLabIssuesMock,
     listLabels: listGitLabLabelsMock,
+    listAssignableUsers: listGitLabAssignableUsersMock,
     listTodos: listGitLabTodosMock,
     getProjectRefForRemote: getGitLabProjectRefForRemoteMock,
     getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock,
@@ -593,14 +544,6 @@ export {
   forceDeleteLocalBranchMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
-  sshGitProviders,
-  sshProviderGenerations,
-  getSshGitProviderMock,
-  getSshGitProviderGenerationMock,
-  registerSshGitProviderMock,
-  unregisterSshGitProviderMock,
-  getActiveMultiplexerMock,
-  muxRequestMock,
   invalidateAuthorizedRootsCacheMock,
   prepareLocalWorktreeRootForRepoMock,
   createHostedReviewMock,
@@ -648,6 +591,7 @@ export {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,

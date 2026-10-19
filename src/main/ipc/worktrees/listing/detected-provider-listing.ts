@@ -11,10 +11,9 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
 import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
-import type { ListDesktopLineageForHostArgs } from '../../../../shared/host-lineage-contract'
 import {
   buildDetectedGitWorktrees,
   createSshWorktreeMetaIndex,
@@ -42,6 +41,7 @@ import {
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
+import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
 
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
@@ -81,9 +81,10 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: true,
         source: 'git',
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
-        worktrees: projectResolvedWorktreeLineage(
-          buildFolderDetectedWorktrees(store, repo),
-          store.getAllWorktreeLineage?.() ?? {}
+        worktrees: projectWorktreeLineageWithHostPeers(
+          store,
+          repo,
+          buildFolderDetectedWorktrees(store, repo)
         )
       }
     }
@@ -123,7 +124,10 @@ export async function listDetectedWorktreesForCapturedRepo(
       return abortedResult() ?? null
     }
     const { gitWorktrees, fresh: freshScan, sideEffectToken, metadataPrune, hygieneDue } = scan
-    const localRows = await withUnregisteredRemovalCheckouts(repo.id, gitWorktrees)
+    const localRows = await withUnregisteredRemovalCheckouts(
+      repo.id,
+      withoutInFlightWorktreeCreates(repo.id, gitWorktrees)
+    )
     const aborted = abortedResult()
     if (aborted) {
       return aborted
@@ -204,14 +208,5 @@ export async function listDetectedWorktreesForCapturedRepo(
 export function hasValidDirectSshAuthority(
   args: DirectSshDetectedWorktreeRequest
 ): args is DirectSshDetectedWorktreeRequest {
-  return isAdmissibleDirectSshAuthority(args.expectedAuthority)
-}
-
-export function hasValidLineageSshAuthority(
-  args: ListDesktopLineageForHostArgs
-): args is Extract<ListDesktopLineageForHostArgs, { expectedAuthority: unknown }> {
-  if (!('expectedAuthority' in args)) {
-    return false
-  }
   return isAdmissibleDirectSshAuthority(args.expectedAuthority)
 }

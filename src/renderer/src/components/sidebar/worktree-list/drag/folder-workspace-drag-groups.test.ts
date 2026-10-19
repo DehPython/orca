@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import { buildRows } from '../grouping/build-rows'
-import type { Row, WorktreeGroupBy } from '../grouping/row-types'
+import { buildRows } from '../grouping/build-rows.test-fixture'
+import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getWorktreeDragGroups, getWorktreeDragIndexes } from './groups'
 import { flushWorktreePointerDragFrame } from './pointer-flush'
 import { commitWorktreePointerDrop } from './pointer-commit'

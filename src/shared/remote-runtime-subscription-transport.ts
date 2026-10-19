@@ -2,7 +2,7 @@ import { closeRemoteRuntimeSocket } from './remote-runtime-socket-close'
 import { throwIfSignalAborted, abortSignalReason } from './abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
-import type { PairingOffer } from './pairing'
+import type { PairedRuntimeConnection } from './paired-runtime-connection'
 import {
   createRemoteRuntimeClientHandshake,
   formatRemoteRuntimeCloseMessage,
@@ -32,19 +32,8 @@ import type {
   RemoteRuntimeTransportSubscriptionCallbacks
 } from './remote-runtime-subscription-contract'
 
-export type {
-  RemoteRuntimeOutboundMemoryBudget,
-  RemoteRuntimeOutboundSocketMemory
-} from './remote-runtime-subscription-outbound'
-
-export type {
-  RemoteRuntimeSubscriptionOptions,
-  RemoteRuntimeTransportSubscription,
-  RemoteRuntimeTransportSubscriptionCallbacks
-} from './remote-runtime-subscription-contract'
-
 export async function subscribeRemoteRuntimeTransport<TResult>(
-  pairing: PairingOffer,
+  connection: PairedRuntimeConnection,
   method: string,
   params: unknown,
   timeoutMs: number,
@@ -55,12 +44,12 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,
-    deviceToken: pairing.deviceToken,
+    deviceToken: connection.credential.deviceToken,
     method,
     params
   })
   return await new Promise((resolve, reject) => {
-    const handshake = createRemoteRuntimeClientHandshake(pairing.publicKeyB64)
+    const handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)
     let settled = false
     let closing = false
     let terminalFailure = false
@@ -72,7 +61,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       fail: (error) => fail(error)
     })
     const requestChannel = new RemoteRuntimeSubscriptionRequestChannel({
-      pairing,
+      connection,
       channel: handshake.channel,
       resolveWritableSocket: () =>
         frameRouter.state === 'ready' && ws && ws.readyState === WebSocket.OPEN ? ws : null,
@@ -83,7 +72,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       handshake,
       sealAuth: () =>
         handshake.sealAuth(
-          { kind: 'token', deviceToken: pairing.deviceToken },
+          { kind: 'token', deviceToken: connection.credential.deviceToken },
           { clientCapabilities: remoteRuntimeClientCapabilities(options?.clientCapabilities) }
         ),
       isSettled: () => terminalFailure || closing,
@@ -218,7 +207,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       options?.connectTimeoutMs
     )
     try {
-      ws = new WebSocket(pairing.endpoint, connectOptions)
+      ws = new WebSocket(connection.endpoint, connectOptions)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       fail(new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`))
@@ -233,7 +222,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       fail(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          remoteRuntimeConnectFailureMessage(error, pairing.endpoint)
+          remoteRuntimeConnectFailureMessage(error, connection.endpoint)
         )
       )
     }
@@ -282,9 +271,11 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     const monitoredWs = ws
     liveness = startRemoteRuntimeSocketLiveness({
       ping: () => {
-        if (monitoredWs.readyState === WebSocket.OPEN) {
-          monitoredWs.ping()
+        if (monitoredWs.readyState !== WebSocket.OPEN) {
+          return false
         }
+        monitoredWs.ping()
+        return true
       },
       onDead: () => {
         fail(
