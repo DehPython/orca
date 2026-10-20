@@ -123,6 +123,7 @@ function pointerDrag(
     currentY: 300,
     worktreeId,
     draggedIds: selection,
+    draggedCopies: [],
     reorderDraggedIds: selection,
     reorderUnitDraggedIds: [worktreeId],
     sourceGroupKey,

@@ -48,7 +48,6 @@ function renderReorder(
 ) {
   return renderHook(() =>
     useWorktreeStatusMutations({
-      worktreeMap: new Map(worktrees.map((worktree) => [worktree.id, worktree])),
       manualOrderCatalog: buildWorktreeManualOrderCatalog({
         worktrees,
         folderWorkspaces
@@ -163,11 +162,11 @@ describe('sidebar manual-order drop', () => {
       })
     })
 
-    // Folder rows are not in the worktree map, so the folder's own host must decide, not 'local'.
+    // The save goes to the folder's own host, not 'local'.
     expect(updateFolderWorkspace).toHaveBeenCalledWith(
       'fw-a',
       { manualOrder: expect.any(Number) },
-      { executionHostId: undefined }
+      { executionHostId: 'ssh:remote-box' }
     )
     const folderOrder = buildWorktreeManualOrderCatalog({
       worktrees: [],
